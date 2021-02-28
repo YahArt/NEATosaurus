@@ -1,13 +1,15 @@
 import pygame as pg
 import os
+import neat
+import random
 
 WINDOW_WIDTH = 640
 WINDOW_HEIGHT = 480
 GREEN_COLOR = (159, 188, 77)
-CACTUS_SPAWN_RATE = 3000
-CACTUS_MOVEMENT_SPEED = -0.3
+CACTUS_SPAWN_RATE = 1000
+CACTUS_MOVEMENT_SPEED = -0.8
 JUMP_HEIGHT = 150
-JUMP_FORCE = 0.6
+JUMP_FORCE = 0.9
 
 class Sprite():
 	def __init__(self, x, y, image):
@@ -104,8 +106,8 @@ class ParallaxSprite(Sprite):
 
 class Dinosaur():
 
-	def __init__(self, x, y):
-		self.sprite = AnimatedSprite(x, y, pg.image.load(os.path.join("assets", "dinosaur_green.png")), 72, 72)
+	def __init__(self, x, y, color):
+		self.sprite = AnimatedSprite(x, y, pg.image.load(os.path.join("assets", "dinosaur_" + color + ".png")), 72, 72)
 		self.sprite.set_collision_rect(40, 40, 30, 10)
 		self.sprite.add_animation("run", [17, 18, 19, 20], 125)
 		self.sprite.set_current_animation("run")
@@ -158,21 +160,32 @@ class Dinosaur():
 
 
 
-def run():
+def run(genomes, config):
 	# Setup PyGame
 	pg.init()
 	pg.font.init()
 
 	debug_draw = False
 
+	dinosaurs = []
+	networks = []
+	ge = []
+
+	dinosaur_colors = ["green", "blue", "red", "yellow"]
+	for _, g in genomes:
+		network = neat.nn.FeedForwardNetwork.create(g, config)
+		networks.append(network)
+		random_color_index = random.randint(0, len(dinosaur_colors) - 1)
+		color = dinosaur_colors[random_color_index]
+		dinosaurs.append(Dinosaur(random.randint(0, 50), 260, color))
+		g.fitness = 0
+		ge.append(g)
+
 	# Setup window
 	window = pg.display.set_mode((WINDOW_WIDTH,WINDOW_HEIGHT), 0)
 	
 	# Setup font
 	font = pg.font.Font(os.path.join("assets", "game_font.ttf"), 16)
-
-	# Setup objects
-	dinosaur = Dinosaur(0, 260)
 
 	cacti = [ParallaxSprite(round(WINDOW_WIDTH * 0.8), 250, pg.image.load(os.path.join("assets", "cactus_green.png")), CACTUS_MOVEMENT_SPEED)]
 	floor = ParallaxSprite(0, 300, pg.image.load(os.path.join("assets", "floor_green.png")), -0.1)
@@ -183,13 +196,16 @@ def run():
 	spawn_timer = 0
 	game_timer = 0
 	running = True
-	collided = False
 
 	while running:
 		clock.tick(60)
 		dt = clock.get_time()
 		spawn_timer += dt
 		game_timer += dt
+
+		# Check if any dinosaurs are still alive:
+		if len(dinosaurs) <= 0:
+			running = False
 
 		# Check if we need to spawn a new cactus
 		if spawn_timer > CACTUS_SPAWN_RATE:
@@ -207,7 +223,9 @@ def run():
 				cactus.update(dt)
 		floor.update(dt)
 		floor_second.update(dt)
-		dinosaur.update(dt)
+
+		for dinosaur in dinosaurs:
+			dinosaur.update(dt)
 
 		# Wrap the floor back if it leaves the screen
 		if floor.x + floor.width()  < 0:
@@ -222,12 +240,22 @@ def run():
 		# Check collissions
 		if len(cacti) > 0:
 			# We only ever need to check the collission with the cactus which is closest to the player (e.g the first one in the  list)
-			collided = dinosaur.has_collided(cacti[0])
+			for index, dinosaur in enumerate(dinosaurs): 
+				if dinosaur.has_collided(cacti[0]):
+					ge[index].fitness -= 0.05
+					dinosaurs.pop(index)
+					networks.pop(index)
+					ge.pop(index)
+				elif dinosaur.sprite.x < cacti[0].x + cacti[0].width():
+					ge[index].fitness += 0.1
+
 
 		# Process events
 		for event in pg.event.get():
 			if event.type == pg.QUIT:
 				running = False
+				pg.quit()
+				quit()
 			# Spacebar to jump
 			if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
 				dinosaur.jump()
@@ -236,30 +264,48 @@ def run():
 			if event.type == pg.KEYDOWN and event.key == pg.K_d:
 				# Toggle Debug Draw
 				debug_draw = not debug_draw
-				dinosaur.set_debug_draw(debug_draw)
+				for dinosaur in dinosaurs:
+					dinosaur.set_debug_draw(debug_draw)
 				for cactus in cacti:
 					cactus.set_debug_draw(debug_draw)
+
+		# Run NEAT
+		if len(cacti) > 0:
+			for index, dinosaur in enumerate(dinosaurs):
+				output = networks[index].activate((dinosaur.sprite.y, abs(dinosaur.sprite.y + dinosaur.sprite.height() - cacti[0].height())))
+
+				if output[0] > 0.5:
+					dinosaur.jump()
 
 		# Draw
 		window.fill((255, 255, 255))
 		current_time_text = font.render(str(game_timer), 0, (0, 0, 0))
-		collide_text = font.render("Dinosaur Collided: " + str(collided), 0, (0, 0, 0))
 		debug_draw_text = font.render("Press d to toggle debug draw mode", 0, (0, 0, 0))
 
 		window.blit(current_time_text, (WINDOW_WIDTH - current_time_text.get_width() - 10, 10))
-		window.blit(collide_text, (WINDOW_WIDTH - collide_text.get_width() - 10, 30))
 		window.blit(debug_draw_text, (WINDOW_WIDTH - debug_draw_text.get_width() - 10, 50))
 		floor.draw(window)
 		floor_second.draw(window)
 
 		for cactus in cacti:
 			cactus.draw(window)
-		dinosaur.draw(window)
+		for dinosaur in dinosaurs:
+			dinosaur.draw(window)
 		pg.display.flip()
 
 	pg.quit()
 
+def main(config_path):
+	config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
 
+	population = neat.Population(config)
+	population.add_reporter(neat.StdOutReporter(True))
+	stats = neat.StatisticsReporter()
+	population.add_reporter(stats)
+
+	winner = population.run(run, 50)
 
 if __name__ == "__main__":
-	run()
+	local_dir = os.path.dirname(__file__)
+	config_path = os.path.join(local_dir, "config-feedforward.txt")
+	main(config_path)
