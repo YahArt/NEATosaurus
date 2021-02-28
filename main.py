@@ -74,8 +74,17 @@ class ParallaxSprite(Sprite):
 
 
 def run():
+	# Setup PyGame
 	pg.init()
+	pg.font.init()
+
+	# Setup window
 	window = pg.display.set_mode((WINDOW_WIDTH,WINDOW_HEIGHT), 0)
+	
+	# Setup font
+	font = pg.font.Font(os.path.join("assets", "game_font.ttf"), 16)
+
+	# Setup objects
 	dinosaur = AnimatedSprite(0, 260, pg.image.load(os.path.join("assets", "dinosaur_green.png")), 72, 72)
 	dinosaur.add_animation("run", [17, 18, 19, 20], 125)
 	dinosaur.set_current_animation("run")
@@ -87,12 +96,14 @@ def run():
 	pg.display.set_caption("NEAToSaurus")
 	clock = pg.time.Clock()
 	spawn_timer = 0
+	game_timer = 0
 	running = True
 
 	while running:
 		clock.tick(60)
 		dt = clock.get_time()
 		spawn_timer += dt
+		game_timer += dt
 
 		# Check if we need to spawn a new cactus
 		if spawn_timer > CACTUS_SPAWN_RATE:
@@ -127,6 +138,9 @@ def run():
 
 		# Draw
 		window.fill((255, 255, 255))
+		current_time_text = font.render(str(game_timer), 0, (0, 0, 0))
+
+		window.blit(current_time_text, (WINDOW_WIDTH - current_time_text.get_width() - 10, 10))
 		floor.draw(window)
 		floor_second.draw(window)
 

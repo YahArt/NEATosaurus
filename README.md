@@ -2,4 +2,5 @@
 "That one" dinosaur game written in PyGame with the NEAT Algorithm
 
 ## Assets
-Assets were used from: https://arks.itch.io/dino-characters
+* Dinosaur Images: https://arks.itch.io/dino-characters
+* Font: https://www.1001fonts.com/joystix-font.html
