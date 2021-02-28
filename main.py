@@ -14,15 +14,25 @@ class Sprite():
 		self.x = x
 		self.y = y
 		self.image = image
+		self.debug_draw = False
+
+	def set_debug_draw(self, debug_draw):
+		self.debug_draw = debug_draw
 
 	def draw(self, window):
 		window.blit(self.image, (self.x, self.y))
+		if self.debug_draw:
+			pg.draw.rect(window, (255, 0, 0), self.rect(), 3)
 
 	def width(self):
 		return self.image.get_width()
 
 	def height(self):
 		return self.image.get_height()
+
+	def rect(self):
+		image_rect = self.image.get_rect()
+		return pg.Rect(self.x, self.y, image_rect.width, image_rect.height)
 
 
 class AnimatedSprite(Sprite):
@@ -35,6 +45,17 @@ class AnimatedSprite(Sprite):
 		self.animation_duration = 0
 		self.animation_index = 0
 		self.animation_ticks = 0
+		self.collision_rect = None
+		self.x_offset = 0
+		self.y_offset = 0
+		self.rect_width = 0
+		self.rect_height = 0
+
+	def set_collision_rect(self, rect_width, rect_height, x_offset, y_offset):
+		self.rect_width = rect_width
+		self.rect_height = rect_height
+		self.x_offset = x_offset
+		self.y_offset = y_offset
 
 	
 	def create_animation_rectangles(self, surface, indices):
@@ -64,8 +85,14 @@ class AnimatedSprite(Sprite):
 		if self.animation_index > len(self.current_animation) - 1:
 			self.animation_index = 0
 
+	def rect(self):
+		return pg.Rect(self.x + self.x_offset, self.y + self.y_offset, self.rect_width, self.rect_height)
+
 	def draw(self, window):
 		window.blit(self.image, (self.x, self.y), area = self.current_animation[self.animation_index])
+		if self.debug_draw:
+			pg.draw.rect(window, (255, 0, 0), self.rect(), 3)
+
 
 class ParallaxSprite(Sprite):
 	def __init__(self, x, y, image, horizontal_speed):
@@ -79,6 +106,7 @@ class Dinosaur():
 
 	def __init__(self, x, y):
 		self.sprite = AnimatedSprite(x, y, pg.image.load(os.path.join("assets", "dinosaur_green.png")), 72, 72)
+		self.sprite.set_collision_rect(40, 40, 30, 10)
 		self.sprite.add_animation("run", [17, 18, 19, 20], 125)
 		self.sprite.set_current_animation("run")
 		self.max_jump_height = self.sprite.y - JUMP_HEIGHT
@@ -109,20 +137,33 @@ class Dinosaur():
 
 		self.sprite.update(dt)
 
+	def has_collided(self, cactus):
+		if self.sprite.rect().colliderect(cactus.rect()):
+			return True
+		return False
+
 	def jump(self):
 		# Only allow jumping when grounded
 		if self.is_grounded:
 			self.is_grounded = False
 			self.is_jumping = True
 
+	def set_debug_draw(self, debug_draw):
+		self.sprite.set_debug_draw(debug_draw)
+
 	def draw(self, window):
 		self.sprite.draw(window)
+		if self.sprite.debug_draw:
+			pg.draw.rect(window, (255, 0, 0), self.sprite.rect(), 3)
+
 
 
 def run():
 	# Setup PyGame
 	pg.init()
 	pg.font.init()
+
+	debug_draw = False
 
 	# Setup window
 	window = pg.display.set_mode((WINDOW_WIDTH,WINDOW_HEIGHT), 0)
@@ -142,6 +183,7 @@ def run():
 	spawn_timer = 0
 	game_timer = 0
 	running = True
+	collided = False
 
 	while running:
 		clock.tick(60)
@@ -152,7 +194,9 @@ def run():
 		# Check if we need to spawn a new cactus
 		if spawn_timer > CACTUS_SPAWN_RATE:
 			spawn_timer = 0
-			cacti.append(ParallaxSprite(WINDOW_WIDTH, 250, pg.image.load(os.path.join("assets", "cactus_green.png")), CACTUS_MOVEMENT_SPEED))
+			new_cactus = ParallaxSprite(WINDOW_WIDTH, 250, pg.image.load(os.path.join("assets", "cactus_green.png")), CACTUS_MOVEMENT_SPEED)
+			new_cactus.set_debug_draw(debug_draw)
+			cacti.append(new_cactus)
 
 		# Update objects
 		cacti_to_delete = []
@@ -175,18 +219,36 @@ def run():
 		for cactus in cacti_to_delete:
 			cacti.remove(cactus)
 
+		# Check collissions
+		if len(cacti) > 0:
+			# We only ever need to check the collission with the cactus which is closest to the player (e.g the first one in the  list)
+			collided = dinosaur.has_collided(cacti[0])
+
 		# Process events
 		for event in pg.event.get():
 			if event.type == pg.QUIT:
 				running = False
+			# Spacebar to jump
 			if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
 				dinosaur.jump()
+
+			# Enable debug draw
+			if event.type == pg.KEYDOWN and event.key == pg.K_d:
+				# Toggle Debug Draw
+				debug_draw = not debug_draw
+				dinosaur.set_debug_draw(debug_draw)
+				for cactus in cacti:
+					cactus.set_debug_draw(debug_draw)
 
 		# Draw
 		window.fill((255, 255, 255))
 		current_time_text = font.render(str(game_timer), 0, (0, 0, 0))
+		collide_text = font.render("Dinosaur Collided: " + str(collided), 0, (0, 0, 0))
+		debug_draw_text = font.render("Press d to toggle debug draw mode", 0, (0, 0, 0))
 
 		window.blit(current_time_text, (WINDOW_WIDTH - current_time_text.get_width() - 10, 10))
+		window.blit(collide_text, (WINDOW_WIDTH - collide_text.get_width() - 10, 30))
+		window.blit(debug_draw_text, (WINDOW_WIDTH - debug_draw_text.get_width() - 10, 50))
 		floor.draw(window)
 		floor_second.draw(window)
 
