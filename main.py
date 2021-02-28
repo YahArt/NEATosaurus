@@ -3,8 +3,8 @@ import os
 
 WINDOW_WIDTH = 640
 WINDOW_HEIGHT = 480
-FLOOR_POSITION_Y = round(WINDOW_HEIGHT * 0.6)
 GREEN_COLOR = (159, 188, 77)
+CACTUS_SPAWN_RATE = 3000
 
 class Sprite():
 	def __init__(self, x, y, image):
@@ -73,7 +73,6 @@ class ParallaxSprite(Sprite):
 		self.x += self.horizontal_speed * dt
 
 
-
 def run():
 	pg.init()
 	window = pg.display.set_mode((WINDOW_WIDTH,WINDOW_HEIGHT), 0)
@@ -81,36 +80,58 @@ def run():
 	dinosaur.add_animation("run", [17, 18, 19, 20], 125)
 	dinosaur.set_current_animation("run")
 
-	cactus = Sprite(200, 250, pg.image.load(os.path.join("assets", "cactus_green.png")))
+	cacti = [ParallaxSprite(round(WINDOW_WIDTH * 0.8), 250, pg.image.load(os.path.join("assets", "cactus_green.png")), -0.1)]
 	floor = ParallaxSprite(0, 300, pg.image.load(os.path.join("assets", "floor_green.png")), -0.1)
 	floor_second = ParallaxSprite(floor.width(), 300, pg.image.load(os.path.join("assets", "floor_green.png")), -0.1)
 
 	pg.display.set_caption("NEAToSaurus")
 	clock = pg.time.Clock()
-	animation_ticks = 0
-	animation_index = 0
+	spawn_timer = 0
 	running = True
 
 	while running:
 		clock.tick(60)
 		dt = clock.get_time()
+		spawn_timer += dt
+
+		# Check if we need to spawn a new cactus
+		if spawn_timer > CACTUS_SPAWN_RATE:
+			spawn_timer = 0
+			cacti.append(ParallaxSprite(WINDOW_WIDTH, 250, pg.image.load(os.path.join("assets", "cactus_green.png")), -0.1))
+
+		# Update objects
+		cacti_to_delete = []
+		for cactus in cacti:
+			if cactus.x + cactus.width() < 0:
+				cacti_to_delete.append(cactus)
+			else:
+				cactus.update(dt)
 		floor.update(dt)
 		floor_second.update(dt)
 		dinosaur.update(dt)
 
+		# Wrap the floor back if it leaves the screen
 		if floor.x + floor.width()  < 0:
 			floor.x = floor_second.x + floor_second.width()
 		if floor_second.x + floor_second.width() < 0:
 			floor_second.x = floor.x + floor.width()
 
+		# Delete objects which are outside of the screen
+		for cactus in cacti_to_delete:
+			cacti.remove(cactus)
+
+		# Process events
 		for event in pg.event.get():
 			if event.type == pg.QUIT:
 				running = False
 
+		# Draw
 		window.fill((255, 255, 255))
 		floor.draw(window)
 		floor_second.draw(window)
-		cactus.draw(window)
+
+		for cactus in cacti:
+			cactus.draw(window)
 		dinosaur.draw(window)
 		pg.display.flip()
 
