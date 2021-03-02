@@ -272,7 +272,7 @@ def run(genomes, config):
 		# Run NEAT
 		if len(cacti) > 0:
 			for index, dinosaur in enumerate(dinosaurs):
-				output = networks[index].activate((dinosaur.sprite.y, abs(dinosaur.sprite.y + dinosaur.sprite.height() - cacti[0].height())))
+				output = networks[index].activate((dinosaur.sprite.x, abs(dinosaur.sprite.x - cacti[0].x)))
 
 				if output[0] > 0.5:
 					dinosaur.jump()
@@ -303,7 +303,7 @@ def main(config_path):
 	stats = neat.StatisticsReporter()
 	population.add_reporter(stats)
 
-	winner = population.run(run, 50)
+	winner = population.run(run, 10)
 
 if __name__ == "__main__":
 	local_dir = os.path.dirname(__file__)
