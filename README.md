@@ -1,5 +1,5 @@
 # NEATosaurus
-"That one" dinosaur game written in PyGame with the NEAT Algorithm
+"That one" dinosaur game written in PyGame with the NEAT Algorithm.
 
 ## Assets
 * Dinosaur Images: https://arks.itch.io/dino-characters
